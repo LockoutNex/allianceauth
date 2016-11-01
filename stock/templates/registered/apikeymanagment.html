@@ -47,7 +47,7 @@
                                 </a>
                                 {% if api_sso_validation and not pair.sso_verified %}
                                 <a href="{% url 'auth_api_sso' pair.api_id %}" class="btn btn-info"
-                                   title="API verify this key">
+                                   title="EVE SSO verify this key">
                                     <i class="fa fa-shield" aria-hidden="true"></i>
                                 </a>
                                 {% endif %}
