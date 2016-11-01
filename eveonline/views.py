@@ -82,6 +82,7 @@ def api_sso_validate(request, tokens, api_id):
     characters = EveApiManager.get_characters_from_api(api.api_id, api.api_key).result
     if token.character_id in characters:
         api.user = request.user
+        api.sso_verified = True
         api.save()
         EveCharacter.objects.filter(character_id__in=characters).update(user=request.user, api_id=api_id)
         messages.success(request, 'Confirmed ownership of API %s' % api.api_id)
