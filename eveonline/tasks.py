@@ -133,6 +133,20 @@ def run_corp_update():
             EveManager.create_alliance(alliance_id)
             EveManager.populate_alliance(alliance_id)
 
+    # set static blue corps
+    static_blue_corp_ids = []
+    if hasattr(settings, 'BLUE_CORP_IDS'):
+        static_blue_corp_ids = settings.BLUE_CORP_IDS
+        for corp_id in settings.BLUE_CORP_IDS:
+            set_corp_blue(corp_id)
+
+    # set static blue alliances
+    static_blue_alliance_ids = []
+    if hasattr(settings, 'BLUE_ALLIANCE_IDS'):
+        static_blue_alliance_ids = settings.BLUE_ALLIANCE_IDS
+        for alliance_id in settings.BLUE_ALLIANCE_IDS:
+            set_alliance_blue(alliance_id)
+
     # update existing corp models
     for corp in EveCorporationInfo.objects.all():
         update_corp.delay(corp.corporation_id)
@@ -151,55 +165,43 @@ def run_corp_update():
                     logger.debug("Standing %s meets threshold" % standing)
                     if EveApiManager.check_if_id_is_alliance(standing):
                         logger.debug("Standing %s is an alliance" % standing)
-                        if EveAllianceInfo.objects.filter(alliance_id=standing).exists():
-                            alliance = EveAllianceInfo.objects.get(alliance_id=standing)
-                            if alliance.is_blue is not True:
-                                logger.info("Updating alliance %s as blue" % alliance)
-                                alliance.is_blue = True
-                                alliance.save()
-                        else:
-                            EveManager.create_alliance(standing, is_blue=True)
+                        set_alliance_blue(standing)
                     elif EveApiManager.check_if_id_is_corp(standing):
                         logger.debug("Standing %s is a corp" % standing)
-                        if EveCorporationInfo.objects.filter(corporation_id=standing).exists():
-                            corp = EveCorporationInfo.objects.get(corporation_id=standing)
-                            if corp.is_blue is not True:
-                                logger.info("Updating corp %s as blue" % corp)
-                                corp.is_blue = True
-                                corp.save()
-                        else:
-                            logger.info("Creating model for blue corp with id %s" % standing)
-                            EveManager.create_corporation(standing, is_blue=True)
+                        set_corp_blue(standing)
 
         # update alliance standings
         for alliance in EveAllianceInfo.objects.filter(is_blue=True):
-            if int(alliance.alliance_id) in standings:
-                if float(standings[int(alliance.alliance_id)]['standing']) < float(settings.BLUE_STANDING):
-                    logger.info("Alliance %s no longer meets minimum blue standing threshold" % alliance)
+            if int(alliance.alliance_id) not in static_blue_alliance_ids:
+                if int(alliance.alliance_id) in standings:
+                    if float(standings[int(alliance.alliance_id)]['standing']) < float(settings.BLUE_STANDING):
+                        logger.info("Alliance %s no longer meets minimum blue standing threshold" % alliance)
+                        alliance.is_blue = False
+                        alliance.save()
+                else:
+                    logger.info("Alliance %s no longer in standings" % alliance)
                     alliance.is_blue = False
                     alliance.save()
-            else:
-                logger.info("Alliance %s no longer in standings" % alliance)
-                alliance.is_blue = False
-                alliance.save()
 
         # update corp standings
         for corp in EveCorporationInfo.objects.filter(is_blue=True):
-            if int(corp.corporation_id) in standings:
-                if float(standings[int(corp.corporation_id)]['standing']) < float(settings.BLUE_STANDING):
-                    logger.info("Corp %s no longer meets minimum blue standing threshold" % corp)
-                    corp.is_blue = False
-                    corp.save()
-            else:
-                if corp.alliance:
-                    if not corp.alliance.is_blue:
-                        logger.info("Corp %s and its alliance %s are no longer blue" % (corp, corp.alliance))
+            if int(corp.corporation_id) not in static_blue_corp_ids:
+                if int(corp.corporation_id) in standings:
+                    if float(standings[int(corp.corporation_id)]['standing']) < float(settings.BLUE_STANDING):
+                        logger.info("Corp %s no longer meets minimum blue standing threshold" % corp)
                         corp.is_blue = False
                         corp.save()
                 else:
-                    logger.info("Corp %s is no longer blue" % corp)
-                    corp.is_blue = False
-                    corp.save()
+                    if corp.alliance:
+                        if not corp.alliance.is_blue:
+                            logger.info("Corp %s and its alliance %s are no longer blue" % (corp, corp.alliance))
+                            corp.is_blue = False
+                            corp.save()
+                    else:
+                        logger.info("Corp %s is no longer blue" % corp)
+                        corp.is_blue = False
+                        corp.save()
+
     except evelink.api.APIError as e:
         logger.error("Model update failed with error code %s" % e.code)
 
@@ -213,13 +215,46 @@ def run_corp_update():
     # delete unnecessary corp models
     for corp in EveCorporationInfo.objects.filter(is_blue=False):
         logger.debug("Checking to delete corp %s" % corp)
-        if not corp.corporation_id in settings.STR_CORP_IDS:
+        if corp.corporation_id not in settings.STR_CORP_IDS:
             logger.debug("Corp %s is not member corp" % corp)
             if corp.alliance:
                 logger.debug("Corp %s has alliance %s" % (corp, corp.alliance))
-                if not corp.alliance.alliance_id in settings.STR_ALLIANCE_IDS:
+                if corp.alliance.alliance_id not in settings.STR_ALLIANCE_IDS and not corp.alliance.is_blue:
                     logger.info("Deleting unnecessary corp model %s" % corp)
                     corp.delete()
             else:
                 logger.info("Deleting unnecessary corp model %s" % corp)
                 corp.delete()
+
+
+def set_corp_blue(corp_id):
+    """
+    Set a corp as blue, create the corp model if it doesn't exist
+    :param corp_id: ID of the corp to set blue
+    :return:
+    """
+    if EveCorporationInfo.objects.filter(corporation_id=corp_id).exists():
+        corp = EveCorporationInfo.objects.get(corporation_id=corp_id)
+        if corp.is_blue is not True:
+            logger.info("Updating corp %s as blue" % corp)
+            corp.is_blue = True
+            corp.save()
+    else:
+        logger.info("Creating model for blue corp with id %s" % corp_id)
+        EveManager.create_corporation(corp_id, is_blue=True)
+
+
+def set_alliance_blue(alliance_id):
+    """
+    Set an alliance as blue, create alliance model if it doesn't exist
+    :param alliance_id: ID of the alliance to set blue
+    :return:
+    """
+    if EveAllianceInfo.objects.filter(alliance_id=alliance_id).exists():
+        alliance = EveAllianceInfo.objects.get(alliance_id=alliance_id)
+        if alliance.is_blue is not True:
+            logger.info("Updating alliance %s as blue" % alliance)
+            alliance.is_blue = True
+            alliance.save()
+    else:
+        EveManager.create_alliance(alliance_id, is_blue=True)
