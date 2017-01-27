@@ -22,6 +22,10 @@ def optional_dependencies():
 
     dependencies = []
 
+    # Skip adding module dependencies if the settings specifies that services have been migrated
+    if hasattr(settings, 'SERVICES_MIGRATED') and settings.SERVICES_MIGRATED:
+        return dependencies
+
     if 'services.modules.xenforo' in installed_apps:
         dependencies.append(('xenforo', '0001_initial'))
     if 'services.modules.discord' in installed_apps:

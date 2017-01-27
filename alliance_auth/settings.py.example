@@ -696,6 +696,13 @@ if ENABLE_AUTH_MARKET or ENABLE_BLUE_MARKET:
 if ENABLE_AUTH_IPS4 or ENABLE_BLUE_IPS4:
     DATABASES['ips4'] = IPS4_DB
 
+# If you have run the authentication.0013_service_modules migration
+# you will need to set this to True in order to install service modules
+# which were involved in that migration after it has been run.
+# If you are on a fresh install with no existing database you can safely
+# set this to True
+SERVICES_MIGRATED = False
+
 # Ensure corp/alliance IDs are expected types
 STR_CORP_IDS = [str(id) for id in CORP_IDS]
 STR_ALLIANCE_IDS = [str(id) for id in ALLIANCE_IDS]
