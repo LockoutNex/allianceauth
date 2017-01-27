@@ -22,15 +22,8 @@ djcelery.setup_loader()
 # Celery configuration
 BROKER_URL = 'redis://localhost:6379/0'
 CELERYBEAT_SCHEDULER = "djcelery.schedulers.DatabaseScheduler"
-CELERYBEAT_SCHEDULE = {
-    """
-    Uncomment this if you are using the Teamspeak3 service
-    'run_ts3_group_update': {
-        'task': 'services.modules.teamspeak3.tasks.Teamspeak3Tasks.run_ts3_group_update',
-        'schedule': crontab(minute='*/30'),
-    },
-    """
-}
+CELERYBEAT_SCHEDULE = dict()
+
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -708,3 +701,9 @@ if ENABLE_AUTH_IPS4 or ENABLE_BLUE_IPS4:
 # Ensure corp/alliance IDs are expected types
 STR_CORP_IDS = [str(id) for id in CORP_IDS]
 STR_ALLIANCE_IDS = [str(id) for id in ALLIANCE_IDS]
+
+if 'services.modules.teamspeak3' in INSTALLED_APPS:
+    CELERYBEAT_SCHEDULE['run_ts3_group_update'] = {
+        'task': 'services.modules.teamspeak3.tasks.Teamspeak3Tasks.run_ts3_group_update',
+        'schedule': crontab(minute='*/30'),
+    }
